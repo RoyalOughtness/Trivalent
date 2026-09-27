@@ -248,3 +248,19 @@ jobs:
     with:
       base64-subjects: ${{ needs.pushrpm.outputs.hashes }}
       upload-assets: true
+
+  notify-failure:
+    name: Notify Discord webhook of failure
+    if: failure()
+    needs: [buildsrpm, buildrpm, pushrpm, provenance]
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Notify Discord webhook of build failure
+        env:
+          WORKFLOW_NAME: ${{ github.workflow }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\": \"Build **${WORKFLOW_NAME}** failed on branch \`${BRANCH_NAME}\`: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" \
+            "${DISCORD_WEBHOOK}"
