@@ -164,7 +164,7 @@ jobs:
       image: "fedora:44@sha256:f717d3f59ea0dc45d3c024c9477e786bab7d418d26636920d17b48016f1e69ca"
     needs: buildrpm
     concurrency:
-      group: publish-repo-secureblue-dev
+      group: trivalent-publish
       cancel-in-progress: false
     outputs:
       hashes: ${{ steps.sign.outputs.hashes }}
