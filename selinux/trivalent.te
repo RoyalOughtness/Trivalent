@@ -383,6 +383,7 @@ fs_all_mount_fs_perms_xattr_fs(trivalent_script_domain)
 
 optional_policy(`
 	bubblewrap_exec(trivalent_script_domain)
+	bubblewrap_exec(trivalent_domain)
 ')
 
 optional_policy(`
