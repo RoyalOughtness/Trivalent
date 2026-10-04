@@ -12,7 +12,7 @@
 
 Name:           %{chromium_name}-selinux
 Epoch:          1
-Version:        1.0.2
+Version:        1.0.3
 Release:        1
 Summary:        SELinux policies for %{chromium_name_branding}
 License:        Apache-2.0 OR MIT
