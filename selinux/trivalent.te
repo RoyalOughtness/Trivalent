@@ -1,4 +1,4 @@
-policy_module(trivalent, 1.0.2)
+policy_module(trivalent, 1.0.4)
 
 # SPDX-FileCopyrightText: Copyright 2025-2026 The Secureblue Authors
 #
@@ -165,6 +165,7 @@ tunable_policy(`trivalent_exec_flatpaks', `
 	read_lnk_files_pattern(trivalent_domain, data_home_t, data_home_t)
 	exec_files_pattern(trivalent_domain, flatpak_home_t, flatpak_home_t)
 	read_lnk_files_pattern(trivalent_domain, flatpak_home_t, flatpak_home_t)
+	list_dirs_pattern(trivalent_domain, flatpak_home_t, flatpak_home_t)
 	# System flatpaks
 	exec_files_pattern(trivalent_domain, var_lib_t, var_lib_t)
 	read_lnk_files_pattern(trivalent_domain, var_lib_t, var_lib_t)
