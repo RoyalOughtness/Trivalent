@@ -43,7 +43,7 @@ permissions: {}
 jobs:
   buildsrpm:
     name: Build SRPM
-    if: github.triggering_actor == 'royaloughtness'
+    if: github.actor == 'royaloughtness' && (github.triggering_actor == 'royaloughtness' || github.triggering_actor == 'runson-v3-secureblue[bot]')
     runs-on: "ubuntu-26.04"
     container:
       image: "fedora:44@sha256:f717d3f59ea0dc45d3c024c9477e786bab7d418d26636920d17b48016f1e69ca"
@@ -100,7 +100,7 @@ jobs:
 
   buildrpm:
     name: Build RPM
-    if: github.triggering_actor == 'royaloughtness'
+    if: github.actor == 'royaloughtness' && (github.triggering_actor == 'royaloughtness' || github.triggering_actor == 'runson-v3-secureblue[bot]')
     timeout-minutes: 180
     needs: buildsrpm
     runs-on: "runs-on=${{ github.run_id }}/runner=x86_64-runner"
@@ -157,7 +157,7 @@ jobs:
 
   pushrpm:
     name: Push RPM
-    if: github.triggering_actor == 'royaloughtness'
+    if: github.actor == 'royaloughtness' && (github.triggering_actor == 'royaloughtness' || github.triggering_actor == 'runson-v3-secureblue[bot]')
     environment: ${{ inputs.test_build && 'TestBuild' || 'Build' }}
     runs-on: "ubuntu-26.04"
     container:

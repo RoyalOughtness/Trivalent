@@ -26,7 +26,7 @@ on:
 jobs:
   build-x86_64-test:
     name: Build x86_64 test
-    if: github.triggering_actor == 'royaloughtness'
+    if: github.actor == 'royaloughtness' && (github.triggering_actor == 'royaloughtness' || github.triggering_actor == 'runson-v3-secureblue[bot]')
     strategy:
       fail-fast: false
     uses: ./.github/workflows/build.yml
