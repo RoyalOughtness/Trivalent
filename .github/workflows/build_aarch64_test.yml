@@ -26,7 +26,7 @@ on:
 jobs:
   build-aarch64-test:
     name: Build aarch64 test
-    if: github.actor == 'royaloughtness' && (github.triggering_actor == 'royaloughtness' || github.triggering_actor == 'runson-v3-secureblue[bot]') # zizmor: ignore[bot-conditions] 
+    if: github.actor == 'royaloughtness' && (github.triggering_actor == 'royaloughtness' || github.triggering_actor == 'runson-v3-secureblue[bot]') # zizmor: ignore[bot-conditions]
     strategy:
       fail-fast: false
     uses: ./.github/workflows/build.yml
