@@ -46,7 +46,7 @@ jobs:
     if: github.actor == 'royaloughtness' && (github.triggering_actor == 'royaloughtness' || github.triggering_actor == 'runson-v3-secureblue[bot]') # zizmor: ignore[bot-conditions]
     runs-on: "ubuntu-26.04"
     container:
-      image: "fedora:45@sha256:aacbc26b38361ba0cb3d10f268da40b61b36aed6ed6fe5831a35871636bedb06"
+      image: "fedora:44@sha256:f717d3f59ea0dc45d3c024c9477e786bab7d418d26636920d17b48016f1e69ca"
     steps:
       - name: Notify Discord webhook of build start
         continue-on-error: true
@@ -105,7 +105,7 @@ jobs:
     needs: buildsrpm
     runs-on: "runs-on=${{ github.run_id }}/runner=x86_64-runner"
     container:
-      image: "fedora:45@sha256:aacbc26b38361ba0cb3d10f268da40b61b36aed6ed6fe5831a35871636bedb06"
+      image: "fedora:44@sha256:f717d3f59ea0dc45d3c024c9477e786bab7d418d26636920d17b48016f1e69ca"
       options: --privileged
     steps:
       - name: Enable egress auditing
@@ -161,7 +161,7 @@ jobs:
     environment: ${{ inputs.test_build && 'TestBuild' || 'Build' }}
     runs-on: "ubuntu-26.04"
     container:
-      image: "fedora:45@sha256:aacbc26b38361ba0cb3d10f268da40b61b36aed6ed6fe5831a35871636bedb06"
+      image: "fedora:44@sha256:f717d3f59ea0dc45d3c024c9477e786bab7d418d26636920d17b48016f1e69ca"
     needs: buildrpm
     concurrency:
       group: trivalent-publish
