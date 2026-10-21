@@ -13,56 +13,23 @@ Forbid dynamic code generation on Linux
 The Windows sandbox prevents dynamic code generation via setting
 MITIGATION_DYNAMIC_CODE_DISABLE on certain processes; prevent dynamic
 code generation in the same processes on Linux via seccomp-bpf.
----
- content/renderer/DEPS                         |  3 ++
- ...renderer_main_platform_delegate_android.cc | 10 ++++--
- .../seccomp-bpf-helpers/baseline_policy.cc    |  4 +--
- sandbox/policy/linux/DEPS                     |  5 +++
- .../policy/linux/bpf_audio_policy_linux.cc    |  3 ++
- .../policy/linux/bpf_renderer_policy_linux.cc | 25 ++++++++++++--
- .../policy/linux/bpf_renderer_policy_linux.h  |  8 +++--
- .../policy/linux/bpf_service_policy_linux.cc  | 21 ++++++++++++
- .../policy/linux/bpf_service_policy_linux.h   |  5 ++-
- .../policy/linux/sandbox_seccomp_bpf_linux.cc | 15 +++++---
- .../renderer/renderer_sources_cc_ext_deps.gni |  8 +++++
- .../sandbox/policy/linux/ext/BUILD.gn         | 10 ++++++
- .../sandbox/policy/linux/ext/DEPS             |  9 +++++
- .../policy/linux/ext/linux_sandbox_utils.cc   | 34 +++++++++++++++++++
- .../policy/linux/ext/linux_sandbox_utils.h    | 11 ++++++
- .../linux/policy_sources_cc_ext_deps.gni      |  1 +
- 16 files changed, 156 insertions(+), 16 deletions(-)
- create mode 100644 sandbox/policy/linux/DEPS
- create mode 100644 vanadium/chromium_src/sandbox/policy/linux/ext/BUILD.gn
- create mode 100644 vanadium/chromium_src/sandbox/policy/linux/ext/DEPS
- create mode 100644 vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.cc
- create mode 100644 vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.h
 
-diff --git a/content/renderer/DEPS b/content/renderer/DEPS
-index 76467b8341182..fc5a361209b7e 100644
---- a/content/renderer/DEPS
-+++ b/content/renderer/DEPS
-@@ -54,4 +54,7 @@ specific_include_rules = {
-     "+components/viz/test",
-     "+third_party/blink/renderer/platform/testing",
-   ],
-+  "renderer_main_platform_delegate_android\\.cc": [
-+    "+vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.h",
-+  ],
- }
 diff --git a/content/renderer/renderer_main_platform_delegate_android.cc b/content/renderer/renderer_main_platform_delegate_android.cc
-index 047156538b2bb..51f0edefe7b58 100644
+index 047156538b..99b04f06c0 100644
 --- a/content/renderer/renderer_main_platform_delegate_android.cc
 +++ b/content/renderer/renderer_main_platform_delegate_android.cc
-@@ -17,6 +17,8 @@
+@@ -17,6 +17,10 @@
  #include "sandbox/policy/linux/bpf_renderer_policy_linux.h"
  #include "sandbox/policy/mojom/sandbox.mojom.h"
  #include "sandbox/policy/sandbox_type.h"
 +
-+#include "vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.h"
++#include "base/command_line.h"
++#include "base/strings/string_split.h"
++#include "third_party/blink/public/common/switches.h"
  #endif
  
  namespace content {
-@@ -57,10 +59,12 @@ bool RendererMainPlatformDelegate::EnableSandbox() {
+@@ -57,10 +61,28 @@ bool RendererMainPlatformDelegate::EnableSandbox() {
    if (sandbox::policy::SandboxTypeFromCommandLine(
            *base::CommandLine::ForCurrentProcess()) ==
            sandbox::mojom::Sandbox::kRenderer &&
@@ -70,7 +37,23 @@ index 047156538b2bb..51f0edefe7b58 100644
 -          sandbox::policy::features::kUseRendererProcessPolicy)) {
 +    base::FeatureList::IsEnabled(
 +        sandbox::policy::features::kUseRendererProcessPolicy)) {
-+    bool dynamic_code_can_be_disabled = sandbox::policy::CanDynamicCodeBeDisabled();
++    const base::CommandLine& command_line =
++        *base::CommandLine::ForCurrentProcess();
++    bool dynamic_code_can_be_disabled = false;
++    if (command_line.HasSwitch(blink::switches::kJavaScriptFlags)) {
++      std::string js_flags =
++          command_line.GetSwitchValueASCII(blink::switches::kJavaScriptFlags);
++      std::vector<std::string_view> js_flag_list = base::SplitStringPiece(
++          js_flags, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
++      for (const auto& js_flag : js_flag_list) {
++        if (js_flag == "--jitless") {
++          // If v8 is running jitless then there is no need for the ability to
++          // mark writable pages as executable to be available to the process.
++          dynamic_code_can_be_disabled = true;
++          break;
++        }
++      }
++    }
      starter.set_policy(
 -        std::make_unique<sandbox::policy::RendererProcessPolicy>(options));
 +        std::make_unique<sandbox::policy::RendererProcessPolicy>(options,
@@ -79,7 +62,7 @@ index 047156538b2bb..51f0edefe7b58 100644
      starter.set_policy(
          std::make_unique<sandbox::BaselinePolicyAndroid>(options));
 diff --git a/sandbox/linux/seccomp-bpf-helpers/baseline_policy.cc b/sandbox/linux/seccomp-bpf-helpers/baseline_policy.cc
-index 85f14c9023df8..eccfc6cb0da2d 100644
+index 85f14c9023..eccfc6cb0d 100644
 --- a/sandbox/linux/seccomp-bpf-helpers/baseline_policy.cc
 +++ b/sandbox/linux/seccomp-bpf-helpers/baseline_policy.cc
 @@ -259,13 +259,13 @@ ResultExpr EvaluateSyscallImpl(int fs_denied_errno,
@@ -98,19 +81,8 @@ index 85f14c9023df8..eccfc6cb0da2d 100644
    }
  
    if (sysno == __NR_prctl)
-diff --git a/sandbox/policy/linux/DEPS b/sandbox/policy/linux/DEPS
-new file mode 100644
-index 0000000000000..60432aebe87df
---- /dev/null
-+++ b/sandbox/policy/linux/DEPS
-@@ -0,0 +1,5 @@
-+specific_include_rules = {
-+  "sandbox_seccomp_bpf_linux\\.cc": [
-+    "+vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.h",
-+  ],
-+}
 diff --git a/sandbox/policy/linux/bpf_audio_policy_linux.cc b/sandbox/policy/linux/bpf_audio_policy_linux.cc
-index e1716b97e8f21..dc25d460460d5 100644
+index e1716b97e8..dc25d46046 100644
 --- a/sandbox/policy/linux/bpf_audio_policy_linux.cc
 +++ b/sandbox/policy/linux/bpf_audio_policy_linux.cc
 @@ -121,6 +121,9 @@ ResultExpr AudioProcessPolicy::EvaluateSyscall(int system_call_number) const {
@@ -124,7 +96,7 @@ index e1716b97e8f21..dc25d460460d5 100644
            SyscallSets::IsSystemVSharedMemory(system_call_number)) {
          return Allow();
 diff --git a/sandbox/policy/linux/bpf_renderer_policy_linux.cc b/sandbox/policy/linux/bpf_renderer_policy_linux.cc
-index 8709f5e70a90a..193ff96b73276 100644
+index 8709f5e70a..193ff96b73 100644
 --- a/sandbox/policy/linux/bpf_renderer_policy_linux.cc
 +++ b/sandbox/policy/linux/bpf_renderer_policy_linux.cc
 @@ -53,15 +53,34 @@ ResultExpr RestrictIoctl() {
@@ -166,7 +138,7 @@ index 8709f5e70a90a..193ff96b73276 100644
      // The baseline policy allows __NR_clock_gettime. Allow
      // clock_getres() for V8. crbug.com/329053.
 diff --git a/sandbox/policy/linux/bpf_renderer_policy_linux.h b/sandbox/policy/linux/bpf_renderer_policy_linux.h
-index 41ed0eaac13c7..630a1c04fd369 100644
+index 41ed0eaac1..630a1c04fd 100644
 --- a/sandbox/policy/linux/bpf_renderer_policy_linux.h
 +++ b/sandbox/policy/linux/bpf_renderer_policy_linux.h
 @@ -19,10 +19,11 @@ namespace sandbox::policy {
@@ -194,7 +166,7 @@ index 41ed0eaac13c7..630a1c04fd369 100644
  
  }  // namespace sandbox::policy
 diff --git a/sandbox/policy/linux/bpf_service_policy_linux.cc b/sandbox/policy/linux/bpf_service_policy_linux.cc
-index 32754e67be3d6..cef498a89b6c1 100644
+index 32754e67be..cef498a89b 100644
 --- a/sandbox/policy/linux/bpf_service_policy_linux.cc
 +++ b/sandbox/policy/linux/bpf_service_policy_linux.cc
 @@ -20,7 +20,28 @@ using sandbox::bpf_dsl::ResultExpr;
@@ -227,7 +199,7 @@ index 32754e67be3d6..cef498a89b6c1 100644
      case __NR_ioctl:
        return RestrictIoctl();
 diff --git a/sandbox/policy/linux/bpf_service_policy_linux.h b/sandbox/policy/linux/bpf_service_policy_linux.h
-index 0f33163d6a87f..48626cb8111fa 100644
+index 0f33163d6a..48626cb811 100644
 --- a/sandbox/policy/linux/bpf_service_policy_linux.h
 +++ b/sandbox/policy/linux/bpf_service_policy_linux.h
 @@ -16,13 +16,16 @@ namespace policy {
@@ -249,31 +221,56 @@ index 0f33163d6a87f..48626cb8111fa 100644
  
  }  // namespace policy
 diff --git a/sandbox/policy/linux/sandbox_seccomp_bpf_linux.cc b/sandbox/policy/linux/sandbox_seccomp_bpf_linux.cc
-index 50b2478e6ca5a..aad49b62a948b 100644
+index 50b2478e6c..1861135854 100644
 --- a/sandbox/policy/linux/sandbox_seccomp_bpf_linux.cc
 +++ b/sandbox/policy/linux/sandbox_seccomp_bpf_linux.cc
-@@ -52,6 +52,7 @@
+@@ -18,6 +18,8 @@
+ #include "base/feature_list.h"
+ #include "base/notreached.h"
+ #include "build/build_config.h"
++#include "base/strings/string_split.h"
++#include "gin/gin_features.h"
+ #include "sandbox/linux/bpf_dsl/bpf_dsl.h"
+ #include "sandbox/linux/bpf_dsl/trap_registry.h"
+ #include "sandbox/policy/mojom/sandbox.mojom.h"
+@@ -52,6 +54,7 @@
  #include "sandbox/policy/linux/bpf_service_policy_linux.h"
  #include "sandbox/policy/linux/bpf_speech_recognition_policy_linux.h"
  #include "sandbox/policy/linux/bpf_utility_policy_linux.h"
-+#include "vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.h"
++#include "third_party/blink/public/common/switches.h"
  #if BUILDFLAG(IS_LINUX)
  #include "sandbox/policy/linux/bpf_xr_policy_linux.h"
  #endif  // BUILDFLAG(IS_LINUX)
-@@ -187,8 +188,10 @@ std::unique_ptr<BPFBasePolicy> SandboxSeccompBPF::PolicyForSandboxType(
+@@ -187,8 +190,26 @@ std::unique_ptr<BPFBasePolicy> SandboxSeccompBPF::PolicyForSandboxType(
    switch (sandbox_type) {
      case sandbox::mojom::Sandbox::kGpu:
        return GetGpuProcessSandbox(options, MremapPolicy::kBlock);
 -    case sandbox::mojom::Sandbox::kRenderer:
 -      return std::make_unique<RendererProcessPolicy>();
 +    case sandbox::mojom::Sandbox::kRenderer: {
-+      bool dynamic_code_can_be_disabled = CanDynamicCodeBeDisabled();
++      const base::CommandLine& command_line =
++          *base::CommandLine::ForCurrentProcess();
++      bool dynamic_code_can_be_disabled = false;
++      if (command_line.HasSwitch(blink::switches::kJavaScriptFlags)) {
++        std::string js_flags =
++            command_line.GetSwitchValueASCII(blink::switches::kJavaScriptFlags);
++        std::vector<std::string_view> js_flag_list = base::SplitStringPiece(
++            js_flags, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
++        for (const auto& js_flag : js_flag_list) {
++          if (js_flag == "--jitless") {
++            // If v8 is running jitless then there is no need for the ability to
++            // mark writable pages as executable to be available to the process.
++            dynamic_code_can_be_disabled = true;
++            break;
++          }
++        }
++      }
 +      return std::make_unique<RendererProcessPolicy>(dynamic_code_can_be_disabled);
 +    }
      case sandbox::mojom::Sandbox::kOnDeviceModelExecution:
        return GetGpuProcessSandbox(options, MremapPolicy::kAllow);
      case sandbox::mojom::Sandbox::kUtility:
-@@ -204,9 +207,11 @@ std::unique_ptr<BPFBasePolicy> SandboxSeccompBPF::PolicyForSandboxType(
+@@ -204,9 +225,27 @@ std::unique_ptr<BPFBasePolicy> SandboxSeccompBPF::PolicyForSandboxType(
      case sandbox::mojom::Sandbox::kAudio:
        return std::make_unique<AudioProcessPolicy>();
      case sandbox::mojom::Sandbox::kService:
@@ -282,128 +279,34 @@ index 50b2478e6ca5a..aad49b62a948b 100644
 -      return std::make_unique<ServiceProcessPolicy>();
 +      return std::make_unique<ServiceProcessPolicy>(true);
 +    case sandbox::mojom::Sandbox::kServiceWithJit: {
-+      bool dynamic_code_can_be_disabled = CanDynamicCodeBeDisabled();
++      const base::CommandLine& command_line =
++          *base::CommandLine::ForCurrentProcess();
++      bool dynamic_code_can_be_disabled = false;
++      if (command_line.HasSwitch(blink::switches::kJavaScriptFlags)) {
++        std::string js_flags =
++            command_line.GetSwitchValueASCII(blink::switches::kJavaScriptFlags);
++        std::vector<std::string_view> js_flag_list = base::SplitStringPiece(
++            js_flags, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
++        for (const auto& js_flag : js_flag_list) {
++          if (js_flag == "--jitless") {
++            // If v8 is running jitless then there is no need for the ability to
++            // mark writable pages as executable to be available to the process.
++            dynamic_code_can_be_disabled = true;
++            break;
++          }
++        }
++      }
 +      return std::make_unique<ServiceProcessPolicy>(dynamic_code_can_be_disabled);
 +    }
      case sandbox::mojom::Sandbox::kSpeechRecognition:
        return std::make_unique<SpeechRecognitionProcessPolicy>();
  #if BUILDFLAG(IS_LINUX)
-diff --git a/vanadium/chromium_src/content/renderer/renderer_sources_cc_ext_deps.gni b/vanadium/chromium_src/content/renderer/renderer_sources_cc_ext_deps.gni
-index 5eba1fab56f39..fad4047ea4ed5 100644
---- a/vanadium/chromium_src/content/renderer/renderer_sources_cc_ext_deps.gni
-+++ b/vanadium/chromium_src/content/renderer/renderer_sources_cc_ext_deps.gni
-@@ -10,6 +10,14 @@ renderer_sources_cc_ext_full_path_deps = [
- # Three lines of code for minimizing conflicts in rebasing changes
- # Three lines of code for minimizing conflicts in rebasing changes
- # Three lines of code for minimizing conflicts in rebasing changes
-+if (is_android) {
-+  renderer_sources_cc_ext_full_path_deps += [
-+    "//vanadium/chromium_src/sandbox/policy/linux/ext:linux_sandbox_utils",
-+  ]
-+}
-+# Three lines of code for minimizing conflicts in rebasing changes
-+# Three lines of code for minimizing conflicts in rebasing changes
-+# Three lines of code for minimizing conflicts in rebasing changes
- renderer_sources_cc_ext_rel_path_deps = [
- ]
- # Three lines of code for minimizing conflicts in rebasing changes
-diff --git a/vanadium/chromium_src/sandbox/policy/linux/ext/BUILD.gn b/vanadium/chromium_src/sandbox/policy/linux/ext/BUILD.gn
-new file mode 100644
-index 0000000000000..dac74f284cb8a
---- /dev/null
-+++ b/vanadium/chromium_src/sandbox/policy/linux/ext/BUILD.gn
-@@ -0,0 +1,10 @@
-+source_set("linux_sandbox_utils") {
-+  sources = [
-+    "linux_sandbox_utils.cc",
-+    "linux_sandbox_utils.h",
-+  ]
-+  deps = [
-+    "//base",
-+    "//third_party/blink/public/common:headers",
-+  ]
-+}
-diff --git a/vanadium/chromium_src/sandbox/policy/linux/ext/DEPS b/vanadium/chromium_src/sandbox/policy/linux/ext/DEPS
-new file mode 100644
-index 0000000000000..d754e07ef22da
---- /dev/null
-+++ b/vanadium/chromium_src/sandbox/policy/linux/ext/DEPS
-@@ -0,0 +1,9 @@
-+include_rules = [
-+  "+base"
-+]
-+
-+specific_include_rules = {
-+  "linux_sandbox_utils\\.cc": [
-+    "+third_party/blink/public/common/switches.h",
-+  ],
-+}
-diff --git a/vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.cc b/vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.cc
-new file mode 100644
-index 0000000000000..26ff37aad4dee
---- /dev/null
-+++ b/vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.cc
-@@ -0,0 +1,34 @@
-+#include "vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.h"
-+
-+#include "base/command_line.h"
-+#include "base/strings/string_split.h"
-+#include "third_party/blink/public/common/switches.h"
-+
-+namespace sandbox {
-+namespace policy {
-+
-+// static
-+bool CanDynamicCodeBeDisabled() {
-+  const base::CommandLine& command_line =
-+      *base::CommandLine::ForCurrentProcess();
-+  bool dynamic_code_can_be_disabled = false;
-+  if (command_line.HasSwitch(blink::switches::kJavaScriptFlags)) {
-+    std::string js_flags =
-+        command_line.GetSwitchValueASCII(blink::switches::kJavaScriptFlags);
-+    std::vector<std::string_view> js_flag_list = base::SplitStringPiece(
-+        js_flags, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
-+    for (const auto& js_flag : js_flag_list) {
-+      if (js_flag == "--jitless") {
-+        // If v8 is running jitless then there is no need for the ability to
-+        // mark writable pages as executable to be available to the process.
-+        dynamic_code_can_be_disabled = true;
-+        break;
-+      }
-+    }
-+  }
-+
-+  return dynamic_code_can_be_disabled;
-+}
-+
-+} // namespace policy
-+} // namespace sandbox
-diff --git a/vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.h b/vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.h
-new file mode 100644
-index 0000000000000..61d755add2ad8
---- /dev/null
-+++ b/vanadium/chromium_src/sandbox/policy/linux/ext/linux_sandbox_utils.h
-@@ -0,0 +1,11 @@
-+#ifndef SANDBOX_POLICY_LINUX_EXT_LINUX_SANDBOX_UTILS_H
-+#define SANDBOX_POLICY_LINUX_EXT_LINUX_SANDBOX_UTILS_H
-+
-+namespace sandbox {
-+namespace policy {
-+
-+bool CanDynamicCodeBeDisabled();
-+} // namespace policy
-+} // namespace sandbox
-+#endif // SANDBOX_POLICY_LINUX_EXT_LINUX_SANDBOX_UTILS_H
-+
-diff --git a/vanadium/chromium_src/sandbox/policy/linux/policy_sources_cc_ext_deps.gni b/vanadium/chromium_src/sandbox/policy/linux/policy_sources_cc_ext_deps.gni
-index 452ea6ece6f23..ccf28d10dbf0b 100644
---- a/vanadium/chromium_src/sandbox/policy/linux/policy_sources_cc_ext_deps.gni
-+++ b/vanadium/chromium_src/sandbox/policy/linux/policy_sources_cc_ext_deps.gni
-@@ -6,6 +6,7 @@
- # Three lines of code for minimizing conflicts in rebasing changes
- # Three lines of code for minimizing conflicts in rebasing changes
- policy_sources_cc_ext_full_path_deps = [
-+  "//vanadium/chromium_src/sandbox/policy/linux/ext:linux_sandbox_utils",
- ]
- # Three lines of code for minimizing conflicts in rebasing changes
- # Three lines of code for minimizing conflicts in rebasing changes
+@@ -219,7 +258,7 @@ std::unique_ptr<BPFBasePolicy> SandboxSeccompBPF::PolicyForSandboxType(
+     case sandbox::mojom::Sandbox::kScreenAI:
+       return std::make_unique<ScreenAIProcessPolicy>();
+     case sandbox::mojom::Sandbox::kPlatformRuntime:
+-      return std::make_unique<ServiceProcessPolicy>();
++      return std::make_unique<ServiceProcessPolicy>(true);
+     case sandbox::mojom::Sandbox::kShapeDetection:
+       return std::make_unique<UtilityProcessPolicy>();
+ #if BUILDFLAG(ENABLE_OOP_VIDEO_DECODER)
