@@ -23,12 +23,13 @@ index 2f63c16702..08ae3c5a5f 100644
  #if BUILDFLAG(IS_WIN)
  #include "chrome/browser/win/parental_controls.h"
  #endif  // BUILDFLAG(IS_WIN)
-@@ -205,8 +207,18 @@ bool IncognitoModePrefs::ShouldLaunchIncognitoInternal(
+@@ -205,8 +207,19 @@ bool IncognitoModePrefs::ShouldLaunchIncognitoInternal(
          browser_defaults::
              kAlwaysOpenIncognitoBrowserIfStartedWithIncognitoSwitch;
    }
-+  bool incognito_launch = prefs->GetBoolean(prefs::kIncognitoLaunch) &&
-+         (prefs->GetBoolean(prefs::kIncognitoStartup) ||
++  const PrefService* pref_service = profile->GetPrefs();
++  bool incognito_launch = pref_service->GetBoolean(prefs::kIncognitoLaunch) &&
++         (pref_service->GetBoolean(prefs::kIncognitoStartup) ||
 +         StartupTabProviderImpl().
 +             HasCommandLineTabs(command_line, base::FilePath("")) ==
 +                 CommandLineTabsPresent::kYes) &&
