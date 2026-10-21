@@ -1,5 +1,5 @@
 diff --git a/components/omnibox/browser/autocomplete_controller.cc b/components/omnibox/browser/autocomplete_controller.cc
-index 22af8003c7..54c42a6871 100644
+index e978d4b3f1..0875f49b23 100644
 --- a/components/omnibox/browser/autocomplete_controller.cc
 +++ b/components/omnibox/browser/autocomplete_controller.cc
 @@ -22,6 +22,7 @@
@@ -10,8 +10,8 @@ index 22af8003c7..54c42a6871 100644
  #include "base/feature_list.h"
  #include "base/format_macros.h"
  #include "base/functional/bind.h"
-@@ -549,6 +550,19 @@ AutocompleteController::AutocompleteController(
-           metrics::OmniboxEventProto::UNKNOWN_POSITION),
+@@ -556,6 +557,20 @@ AutocompleteController::AutocompleteController(
+       steady_state_omnibox_position_(OEP::UNKNOWN_POSITION),
        config_(config) {
    config_.provider_types &= ~OmniboxFieldTrial::GetDisabledProviderTypes();
 +  const std::string kOmniboxScopeFlag = "scope-omnibox-autocomplete";
@@ -20,18 +20,19 @@ index 22af8003c7..54c42a6871 100644
 +    std::vector<std::string> switch_values = base::SplitString(
 +        cmdline->GetSwitchValueASCII(kOmniboxScopeFlag), ",",
 +        base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
-+    config_.provider_types = AutocompleteProvider::TYPE_KEYWORD | AutocompleteProvider::TYPE_SEARCH |
-+        AutocompleteProvider::TYPE_HISTORY_URL;
++    config_.provider_types = static_cast<int>(
++        AutocompleteProvider::Type::kKeyword | AutocompleteProvider::Type::kSearch |
++        AutocompleteProvider::Type::kHistoryUrl);
 +    if (std::ranges::contains(switch_values, "bookmarks"))
-+      config_.provider_types |= AutocompleteProvider::TYPE_BOOKMARK;
++      config_.provider_types |= static_cast<int>(AutocompleteProvider::Type::kBookmark);
 +    if (std::ranges::contains(switch_values, "chrome"))
-+      config_.provider_types |= AutocompleteProvider::TYPE_BUILTIN;
++      config_.provider_types |= static_cast<int>(AutocompleteProvider::Type::kBuiltin);
 +  }
  
    // Providers run in the order they're added. Async providers should run first
    // so their async requests can be kicked off before waiting a few milliseconds
 diff --git a/components/omnibox/browser/history_url_provider.cc b/components/omnibox/browser/history_url_provider.cc
-index 526c06fdfe..16135f689c 100644
+index 4a4afd3526..0c7d0bfc06 100644
 --- a/components/omnibox/browser/history_url_provider.cc
 +++ b/components/omnibox/browser/history_url_provider.cc
 @@ -487,6 +487,9 @@ void HistoryURLProvider::Start(const AutocompleteInput& input,
@@ -45,7 +46,7 @@ index 526c06fdfe..16135f689c 100644
    history::HistoryService* const history_service =
        client()->GetHistoryService();
 diff --git a/components/omnibox/browser/search_provider.cc b/components/omnibox/browser/search_provider.cc
-index ff56a4fb37..bea9159cde 100644
+index 4fad769790..1b8dbd23d1 100644
 --- a/components/omnibox/browser/search_provider.cc
 +++ b/components/omnibox/browser/search_provider.cc
 @@ -15,6 +15,7 @@
@@ -56,7 +57,7 @@ index ff56a4fb37..bea9159cde 100644
  #include "base/feature_list.h"
  #include "base/functional/bind.h"
  #include "base/functional/callback.h"
-@@ -682,6 +683,9 @@ void SearchProvider::Run(bool query_is_private) {
+@@ -681,6 +682,9 @@ void SearchProvider::Run(bool query_is_private) {
  }
  
  void SearchProvider::DoHistoryQuery(bool minimal_changes) {
@@ -67,7 +68,7 @@ index ff56a4fb37..bea9159cde 100644
    // we still have the last results and don't need to do anything.
    if (minimal_changes)
 diff --git a/components/url_formatter/url_fixer.cc b/components/url_formatter/url_fixer.cc
-index d5d9a14c8d..6875acd917 100644
+index d5d9a14c8d..61c284bdc7 100644
 --- a/components/url_formatter/url_fixer.cc
 +++ b/components/url_formatter/url_fixer.cc
 @@ -10,6 +10,8 @@
