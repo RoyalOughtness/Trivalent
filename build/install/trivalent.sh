@@ -110,7 +110,7 @@ mkdir -p "${xdg_app_dir}"
 # Check if Trivalent's subresource filter is installed,
 # if so runs the installer
 if [[ -f "/usr/lib64/trivalent/install_filter.sh" ]] ; then
-  /bin/bash /usr/lib64/trivalent/install_filter.sh
+  /bin/bash -p /usr/lib64/trivalent/install_filter.sh
 fi
 
 declare -r TMPFS_CACHE_DIR="${HOME}/.cache/${CHROMIUM_NAME}_cache/"
