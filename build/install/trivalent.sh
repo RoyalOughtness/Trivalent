@@ -69,6 +69,9 @@ declare USE_WAYLAND="${USE_WAYLAND:-}"
 declare FEATURES=""
 declare CHROMIUM_FLAGS=""
 
+# ALLOW_UNSAFE_FLAGS=[true|false]
+declare ALLOW_UNSAFE_FLAGS="false"
+
 # obtain extra flags that are likely user-configured
 if [[ -d "/etc/${CHROMIUM_NAME}/${CHROMIUM_NAME}.conf.d" ]]; then
   for conf_file in "/etc/${CHROMIUM_NAME}/${CHROMIUM_NAME}.conf.d"/*.conf; do
@@ -101,6 +104,29 @@ if [[ -f "/etc/${CHROMIUM_NAME}/${CHROMIUM_NAME}.conf" ]]; then
 fi
 
 declare -r CHROMIUM_ALL_FLAGS="${CHROMIUM_FLAGS} ${CHROMIUM_SYSTEM_FLAGS}"
+
+# Filter out commandline arguments that aren't safe
+declare CMD_ARGS=()
+if [[ "${ALLOW_UNSAFE_FLAGS}" != "true" ]]; then
+  declare Allowlist="version|restart|ozone-platform|disable-gpu" # Misc flags
+  declare Allowlist+="|profile-directory|user-data-dir|disk-cache-dir|disk-cache-size" # Directory and cache flags
+  declare Allowlist+="|guest|incognito|restore-last-session|new-window|class" # Session and window flags
+  declare Allowlist+="|enable-logging|log-level|log-file" # Loggings flags
+  declare Allowlist+="|app-id|app|uninstall-app-id|app-launch-url-for-shortcuts-menu-item" # PWA flags
+  declare -r Allowlist
+  for arg in "$@"; do
+    declare argNoPrefix="${arg:2}"
+    # Don't filter non-arguments (like URLs and such)
+    if ! [[ "${arg:0:1}" != "-" || "${argNoPrefix%="${argNoPrefix#*=}"}" =~ ^(${Allowlist})$ ]]; then
+      logecho 1 "Filtering out unsafe flag: ${arg}"
+      continue
+    fi
+    CMD_ARGS+=("${arg}")
+  done
+else
+  CMD_ARGS=("${@}")
+fi
+declare -r CMD_ARGS
 
 # desktop integration
 declare -r xdg_app_dir="${XDG_DATA_HOME:-"${HOME}/.local/share/applications"}"
@@ -135,4 +161,4 @@ exec > >(exec cat)
 exec 2> >(exec cat >&2)
 
 # shellcheck disable=SC2086
-exec bwrap "${BWRAP_ARGS[@]}" -- "${HERE}/${CHROMIUM_NAME}" ${CHROMIUM_ALL_FLAGS} "${@}"
+exec bwrap "${BWRAP_ARGS[@]}" -- "${HERE}/${CHROMIUM_NAME}" ${CHROMIUM_ALL_FLAGS} "${CMD_ARGS[@]}"
