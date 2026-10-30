@@ -159,7 +159,7 @@ jobs:
     name: Sanity Check
     if: github.actor == 'royaloughtness' && (github.triggering_actor == 'royaloughtness' || github.triggering_actor == 'runson-v3-secureblue[bot]') # zizmor: ignore[bot-conditions]
     runs-on: "ubuntu-26.04"
-    needs: buildrpm
+  #  needs: buildrpm
     permissions:
       contents: read 
     steps:
