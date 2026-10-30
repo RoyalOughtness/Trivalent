@@ -161,7 +161,7 @@ jobs:
     runs-on: "ubuntu-26.04"
     needs: buildrpm
     permissions:
-      contents: read 
+      contents: read
     steps:
       - name: Enable egress auditing
         uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
