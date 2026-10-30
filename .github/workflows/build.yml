@@ -183,11 +183,12 @@ jobs:
         run: |
           sudo apt-get install -qqy qemu-system-arm qemu-efi-aarch64
           limactl start -y --name=default --arch="${ARCH}" --set='.video.display = "vnc"' template:fedora-44
-          lima sudo dnf install -y *.rpm cage
+          # lima sudo dnf install -y *.rpm cage
+          sudo dnf install -y cage
           # temporary
 
           lima sudo dnf install -y --repofrompath=secureblue,https://repo.secureblue.dev \
-            --setopt=secureblue.gpgkey=https://repo.secureblue.dev/secureblue.gpg trivalent cage
+            --setopt=secureblue.gpgkey=https://repo.secureblue.dev/secureblue.gpg trivalent
           lima sudo systemctl stop getty@tty1
           lima sudo systemd-run --uid=runner -p PAMName=login -p TTYPath=/dev/tty1 -p StandardInput=tty \
             -E WLR_RENDERER=pixman cage -- trivalent
