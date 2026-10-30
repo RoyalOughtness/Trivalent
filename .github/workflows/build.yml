@@ -193,7 +193,6 @@ jobs:
           lima sudo systemd-run --uid=runner --unit=kiosk -p PAMName=login -p TTYPath=/dev/tty1 -p StandardInput=tty \
             -E WLR_RENDERER=pixman -p StandardOutput=journal cage -- setpriv --ambient-caps=-all trivalent
           until lima pgrep -f --older 5 type=renderer; do
-            lima sudo systemctl status kiosk --no-pager 
             sleep 5; 
           done
           lima env WAYLAND_DISPLAY=wayland-0 grim /tmp/trivalent.png
