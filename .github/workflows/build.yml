@@ -190,12 +190,13 @@ jobs:
           lima sudo dnf install -y --repofrompath=secureblue,https://repo.secureblue.dev \
             --setopt=secureblue.gpgkey=https://repo.secureblue.dev/secureblue.gpg trivalent
           lima sudo systemctl stop getty@tty1
-          lima sudo systemd-run --uid=runner -p PAMName=login -p TTYPath=/dev/tty1 -p StandardInput=tty \
-            -E WLR_RENDERER=pixman cage -- trivalent
+          lima sudo systemd-run --uid=runner --unit=kiosk -p PAMName=login -p TTYPath=/dev/tty1 -p StandardInput=tty \
+            -E WLR_RENDERER=pixman -p StandardOutput=journal cage -- trivalent
           until lima pgrep -f --older 5 type=renderer; do
+            lima sudo systemctl status kiosk --no-pager 
             sleep 5; 
           done
-          limactl screenshot vm --output trivalent.png
+          limactl screenshot default --output trivalent.png
 
       - name: Upload screenshot
         if: always()
