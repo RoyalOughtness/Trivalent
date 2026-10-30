@@ -204,6 +204,7 @@ jobs:
         with:
           name: trivalent-screenshot
           path: trivalent.png
+          archive: false
           compression-level: 0
           retention-days: 7
 
