@@ -184,7 +184,7 @@ jobs:
           sudo apt-get install -qqy qemu-system-arm qemu-efi-aarch64
           limactl start -y --name=default --arch="${ARCH}" --set='.video.display = "vnc"' template:fedora-44
           # lima sudo dnf install -y *.rpm cage
-          lima sudo dnf install -y cage
+          lima sudo dnf install -y cage grim
           # temporary
 
           lima sudo dnf install -y --repofrompath=secureblue,https://repo.secureblue.dev \
@@ -196,7 +196,8 @@ jobs:
             lima sudo systemctl status kiosk --no-pager 
             sleep 5; 
           done
-          limactl screenshot default --output trivalent.png
+          lima env WAYLAND_DISPLAY=wayland-0 grim /tmp/trivalent.png
+          limactl copy default:/tmp/trivalent.png trivalent.png
 
       - name: Upload screenshot
         if: always()
